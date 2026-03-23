@@ -120,7 +120,7 @@ end
 local function font_opt_dim (fd, optname)
   local dim = option_in_font(fd, optname)
   if dim then
-    local params, m, u
+    local m, u
     if type(dim) == "string" then
       m, u = dim:match"^(.+)(e[mx])%s*$"
     end
@@ -2028,36 +2028,36 @@ local function activate_process (cbnam, cbfun, name, first)
 end
 
 local get_hb_char_bbox
-do
-  local cachedir, get_cache_data, store_cache_data
-  if harfbuzz then
+if harfbuzz then
+  local cachedir
+  local function get_cachedir ()
+    if cachedir == false then return end
     local texmfvar = kpse.var_value"TEXMFVAR"
     if texmfvar and texmfvar ~= "" then
       for _,v in ipairs(texmfvar:explode(os.type == "unix" and ":" or ";")) do
         local dir = ("%s/%s"):format(v,"luatexko_cache")
         if lfs.attributes(dir,"mode") ~= "directory" then lfs.mkdirp(dir) end
-        if file.is_writable(dir) then cachedir = dir; break end
+        if file.is_writable(dir) then cachedir = dir; return dir end
       end
     end
-    if cachedir then
-      local function get_cache_name (fontdata, suffix)
-        local version = fontdata.hb.shared.face:get_name(harfbuzz.ot.NAME_ID_VERSION_STRING)
-           or assert(lfs.attributes(fontdata.specification.filename, "modification"))
-        local name = ("%s_%s_%s"):format(fontdata.fullname, version, suffix)
-        local hexa = ('%02x'):rep(256/8):format(sha2.digest256(name):byte(1, -1))
-        return ("%s/%s.lua"):format(cachedir, hexa)
-      end
-      function get_cache_data (fontdata, suffix)
-        local name = get_cache_name(fontdata, suffix)
-        if lfs.attributes(name, "mode") == "file" then
-          return require(name)
-        end
-      end
-      function store_cache_data (fontdata, suffix, data)
-        local name = get_cache_name(fontdata, suffix)
-        table.tofile(name, data, "return")
-      end
+    cachedir = false
+  end
+  local function get_cache_name (fontdata, suffix)
+    local version = fontdata.hb.shared.face:get_name(harfbuzz.ot.NAME_ID_VERSION_STRING)
+    or assert(lfs.attributes(fontdata.specification.filename, "modification"))
+    local name = ("%s_%s_%s"):format(fontdata.fullname, version, suffix)
+    local hexa = ('%02x'):rep(256/8):format(sha2.digest256(name):byte(1, -1))
+    return ("%s/%s.lua"):format(cachedir, hexa)
+  end
+  local function get_cache_data (fontdata, suffix)
+    local name = get_cache_name(fontdata, suffix)
+    if lfs.attributes(name, "mode") == "file" then
+      return require(name)
     end
+  end
+  local function store_cache_data (fontdata, suffix, data)
+    local name = get_cache_name(fontdata, suffix)
+    table.tofile(name, data, "return")
   end
   local function get_char_bbox (hbfont, gid)
     local t = hbfont:get_glyph_extents(gid) -- quite slow for CFF
@@ -2071,7 +2071,7 @@ do
     local bboxes = fontoptions.hb_char_bbox[key]
     local bbox = bboxes and bboxes[index]
     if bbox then return bbox end
-    if cachedir then
+    if cachedir or get_cachedir() then
       local data = get_cache_data(fontdata, "bbox")
       if not data then
         data = { }
