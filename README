@@ -12,7 +12,6 @@ this package to run.
 
 This package also requires cjk-ko package for its full functionality.
 
-
 License
 -------
 
@@ -21,7 +20,6 @@ This package is licensed under [LPPL](http://latex-project.org/lppl/)
 
 See each file for details.
 
-
 Author
 ------
 
@@ -29,10 +27,9 @@ Author
     Soojin Nam <jsunam at gmail com>
 
 Please report any errors or suggestions to
-    Dohyun Kim <nomosnomos at gmail com> (current maintainer)
+    Dohyun Kim &lt;nomosnomos at gmail com&gt; (current maintainer)
 or leave messages in the issue tracker at:
     <http://github.com/dohyunkim/luatexko>
-
 
 Files
 -----
@@ -51,7 +48,6 @@ Documents
     README (this file)      -> doc/luatex/luatexko/
     ChangeLog               -> doc/luatex/luatexko/
 
-
 Loading
 -------
 
@@ -68,7 +64,6 @@ Under plain TeX:
 
     \input luatexko.sty
 
-
 Package Options
 ---------------
 
@@ -78,7 +73,6 @@ interline spacing. Declares \hangulpunctuations=1 as well.
 
     [hanja]
 Load Hanja captions. Also apply other settings as [hangul] option does.
-
 
 Hangul Font Commands
 --------------------
@@ -112,7 +106,6 @@ In like manner, these commands are available as well:
 If any of these CJK fonts are not specified, UnBatang/UnDotum TrueType
 fonts will be used for typesetting CJK characters.
 
-
 Hangul Font Options
 -------------------
 
@@ -132,7 +125,7 @@ Set stretching of the glue between CJK characters.
 Set the penalty (default: 50) inserted between CJK characters.
 
     [CharRaise=<dimen>]
-Raise CJK characters by <dimen>.
+Raise CJK characters by &lt;dimen&gt;.
 
     [CompressPunctuations]
 Make CJK punctuations half-width.
@@ -144,7 +137,7 @@ Other User Commands
 -------------------
 
     \hangulpunctuations=<number>
-When <number> is 1 or greater (being default value), latin punctuations
+When &lt;number&gt; is 1 or greater (being default value), latin punctuations
 will be typeset with hangul fonts.
 
     \dotemph{...}
@@ -167,8 +160,8 @@ Command/environment for typesetting old document in horizontal writing mode.
 
     \begin{vertical}{<dimen>}
     \end{vertical}
-This environment makes a box vertically typeset. <dimen> is an
-argument to indicate the box height. When the <dimen> is \empty,
+This environment makes a box vertically typeset. &lt;dimen&gt; is an
+argument to indicate the box height. When the &lt;dimen&gt; is \empty,
 a box with natural height will result. For vertical writing of
 entire document, use the command \verticaltypesetting instead.
 
@@ -176,4 +169,4 @@ entire document, use the command \verticaltypesetting instead.
 Commands for automatic Josa selection. Unlike those of cjk-ko
 package, these commands work correctly even after Hangul or Hanja.
 
-*END of README*
+<!--END of README-->
