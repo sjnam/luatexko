@@ -927,6 +927,26 @@ do
   end
 end
 
+-- The four pre-linebreak passes below share one traversal skeleton: step
+-- through the list, skip the "char head" and HarfBuzz-literal marker nodes
+-- while remembering the first skipped one as the anchor -- the node before
+-- which any glue or penalty is inserted -- and hand every real node to a
+-- per-pass handler. The handler mutates its own captured state and returns
+-- the node to resume from; that return is what lets the math branch jump
+-- past end_of_math(). Returning nothing simply resumes at the current node.
+local function walk_prelinebreak (head, handle)
+  local curr, pcurr = head, false
+  while curr do
+    if has_attribute(curr, charhead) or harf_actual_literal(curr) == 1 then
+      pcurr = pcurr or curr
+    else
+      curr = handle(curr, pcurr or curr) or curr
+      pcurr = false
+    end
+    curr = getnext(curr)
+  end
+end
+
 local process_cjk_punctuation_spacing, process_linebreak
 do
   local function maybe_linebreak (head, curr, pc, pcl, cc, old, fid, par)
@@ -944,104 +964,92 @@ do
     return head, cc, ccl, fid
   end
   function process_cjk_punctuation_spacing (head, par)
-    local pcl, pc, pf, old, pcurr = 0, false, false, false
+    local pcl, pc, pf, old = 0, false, false, false
     --[[
     -- pcl: 앞 글자 클래스(0..7)
     -- pc : 앞 글자 코드
     -- pf : 앞 글자 폰트
     -- old: 현재 classic 모드임을 표시 (이 함수는 classic 모드에서만 동작한다)
-    -- pcurr: 글자 첫머리 노드
     --]]
-    local curr = head
-    while curr do
-      if has_attribute(curr, charhead) or harf_actual_literal(curr) == 1 then
-        pcurr = pcurr or curr
-      else
-        local id = curr.id
-        if id == glyphid and curr.lang ~= nohyphen then
-          local cc = curr.char
-          old = has_attribute(curr, classicattr)
-          local ccl = get_char_class(cc, old)
-          if old and intercharclass[pcl][ccl] then
-            local cf = charclass[cc] == 0 and pf or curr.font
-            head = maybe_linebreak(head, pcurr or curr, pc, pcl, cc, old, cf, par)
-          end
-          pcl, pc, pf = ccl, cc, curr.font
-        elseif is_blocking_node(curr) then
-          if id == glueid and (curr.subtype >= 13 and curr.subtype <= 15 -- spaceskip .. parfillskip
-            or has_attribute(curr, inhibitglueattr)) then
-            pcl, pc, pf = 0, false, false
-          else
-            if pf and old and intercharclass[pcl][0] then
-              head = maybe_linebreak(head, pcurr or curr, pc, pcl, 0x4E00, old, pf, par)
-            end
-            pcl, pc, pf = 0, 0x4E00, false
-          end
+    local function handle (curr, anchor)
+      local id = curr.id
+      if id == glyphid and curr.lang ~= nohyphen then
+        local cc = curr.char
+        old = has_attribute(curr, classicattr)
+        local ccl = get_char_class(cc, old)
+        if old and intercharclass[pcl][ccl] then
+          local cf = charclass[cc] == 0 and pf or curr.font
+          head = maybe_linebreak(head, anchor, pc, pcl, cc, old, cf, par)
         end
-        pcurr = false
+        pcl, pc, pf = ccl, cc, curr.font
+      elseif is_blocking_node(curr) then
+        if id == glueid and (curr.subtype >= 13 and curr.subtype <= 15 -- spaceskip .. parfillskip
+          or has_attribute(curr, inhibitglueattr)) then
+          pcl, pc, pf = 0, false, false
+        else
+          if pf and old and intercharclass[pcl][0] then
+            head = maybe_linebreak(head, anchor, pc, pcl, 0x4E00, old, pf, par)
+          end
+          pcl, pc, pf = 0, 0x4E00, false
+        end
       end
-      curr = getnext(curr)
     end
+    walk_prelinebreak(head, handle)
     return head
   end
   function process_linebreak (head, par)
-    local curr, pc, pcl, pf, pcurr = head, false, 0, false, false
+    local pc, pcl, pf = false, 0, false
     --[[
     -- pc : 앞 글자 코드
     -- pcl: 앞 글자 클래스(0..7)
     -- pf : 앞 글자 폰트
-    -- pcurr: 글자 첫머리 노드(unhbox되어 들어오는 노드리스트 처리시 필요)
     --]]
-    while curr do
-      if has_attribute(curr, charhead) or harf_actual_literal(curr) == 1 then
-        pcurr = pcurr or curr
-      else
-        local id = curr.id
-        if id == glyphid then
-          local c = has_attribute(curr, unicodeattr) or curr.char
-          if c and not is_combining(c) then
-            local old = has_attribute(curr, classicattr)
-            local cjk = is_cjk_char(c)
-            local f = cjk and curr.font or pf or curr.font
-            if old and cjk and pc == -1 then -- penalty only (f is nil below) for non-glyph box + cjk
-              head = insert_glue_before(head, pcurr or curr, par, true, false)
-              pc, pf, pcl = c, f, get_char_class(c, old)
-            else
-              head, pc, pcl, pf = maybe_linebreak(head, pcurr or curr, pc, pcl, c, old, f, par)
-            end
-          end
-
-        elseif (id == hlistid or id == vlistid) and is_blocking_node(curr) then
+    local function handle (curr, anchor)
+      local id = curr.id
+      if id == glyphid then
+        local c = has_attribute(curr, unicodeattr) or curr.char
+        if c and not is_combining(c) then
           local old = has_attribute(curr, classicattr)
-          local c, f = hbox_char_font(curr, true)
-          if c then
-            head = maybe_linebreak(head, pcurr or curr, pc, pcl, c, old, pf or f, false) -- par is false
-          elseif old and pc and is_cjk_char(pc) then -- penalty only
-            head = insert_glue_before(head, pcurr or curr, false, true, false)
+          local cjk = is_cjk_char(c)
+          local f = cjk and curr.font or pf or curr.font
+          if old and cjk and pc == -1 then -- penalty only (f is nil below) for non-glyph box + cjk
+            head = insert_glue_before(head, anchor, par, true, false)
+            pc, pf, pcl = c, f, get_char_class(c, old)
+          else
+            head, pc, pcl, pf = maybe_linebreak(head, anchor, pc, pcl, c, old, f, par)
           end
-          c, f = hbox_char_font(curr)
-          pc, pf, pcl  = c or old and -1, pf or f, c and get_char_class(c, old) or 0
+        end
 
-        elseif id == mathid then
-          pc, pcl, curr = 0x30, 0, end_of_math(curr)
+      elseif (id == hlistid or id == vlistid) and is_blocking_node(curr) then
+        local old = has_attribute(curr, classicattr)
+        local c, f = hbox_char_font(curr, true)
+        if c then
+          head = maybe_linebreak(head, anchor, pc, pcl, c, old, pf or f, false) -- par is false
+        elseif old and pc and is_cjk_char(pc) then -- penalty only
+          head = insert_glue_before(head, anchor, false, true, false)
+        end
+        c, f = hbox_char_font(curr)
+        pc, pf, pcl  = c or old and -1, pf or f, c and get_char_class(c, old) or 0
 
-        elseif id == dirid then
-          if curr.dir:sub(1,1) == "+" then -- push dir
-            local n = getnext(curr)
-            if n.id == glyphid then
-              local old = has_attribute(n, classicattr)
-              head = maybe_linebreak(head, pcurr or curr, pc, pcl, n.char, old, n.font, par)
-            end
-            pc, pcl = false, 0
+      elseif id == mathid then
+        pc, pcl = 0x30, 0
+        return end_of_math(curr)
+
+      elseif id == dirid then
+        if curr.dir:sub(1,1) == "+" then -- push dir
+          local n = getnext(curr)
+          if n.id == glyphid then
+            local old = has_attribute(n, classicattr)
+            head = maybe_linebreak(head, anchor, pc, pcl, n.char, old, n.font, par)
           end
-
-        elseif is_blocking_node(curr) then
           pc, pcl = false, 0
         end
-        pcurr = false
+
+      elseif is_blocking_node(curr) then
+        pc, pcl = false, 0
       end
-      curr = getnext(curr)
     end
+    walk_prelinebreak(head, handle)
     return head
   end
 end
@@ -1063,48 +1071,43 @@ do
     return head, cc, fontid
   end
   function process_interhangul (head, par)
-    local curr, pc, pf, pcurr = head, 0, false, false
+    local pc, pf = 0, false
     --[[
     -- pc: 앞 글자 한글 여부(1 or 0)
     -- pf: 앞 글자 폰트
-    -- pcurr: 글자 첫머리 노드
     --]]
-    while curr do
-      if has_attribute(curr, charhead) or harf_actual_literal(curr) == 1 then
-        pcurr = pcurr or curr
-      else
-        local id = curr.id
-        if id == glyphid then
-          local c = has_attribute(curr, unicodeattr) or curr.char
-          if c and not is_combining(c) then
-            head, pc, pf = do_interhangul_option(head, pcurr or curr, pc, c, curr.font, par)
-          end
+    local function handle (curr, anchor)
+      local id = curr.id
+      if id == glyphid then
+        local c = has_attribute(curr, unicodeattr) or curr.char
+        if c and not is_combining(c) then
+          head, pc, pf = do_interhangul_option(head, anchor, pc, c, curr.font, par)
+        end
 
-        elseif id == hlistid and is_blocking_node(curr) then
-          local c, f = hbox_char_font(curr, true)
-          if c then
-            head, pc, pf = do_interhangul_option(head, pcurr or curr, pc, c, pf or f, false)
-          end
-          c, f = hbox_char_font(curr)
-          pc, pf = c and is_hangul_jamo(c) and 1 or 0, pf or f
+      elseif id == hlistid and is_blocking_node(curr) then
+        local c, f = hbox_char_font(curr, true)
+        if c then
+          head, pc, pf = do_interhangul_option(head, anchor, pc, c, pf or f, false)
+        end
+        c, f = hbox_char_font(curr)
+        pc, pf = c and is_hangul_jamo(c) and 1 or 0, pf or f
 
-        elseif id == mathid then
-          pc, curr = 0, end_of_math(curr)
-        elseif id == dirid then
-          if curr.dir:sub(1,1) == "+" then
-            local n = getnext(curr)
-            if n.id == glyphid then
-              head = do_interhangul_option(head, pcurr or curr, pc, n.char, n.font, par)
-            end
-            pc = 0
+      elseif id == mathid then
+        pc = 0
+        return end_of_math(curr)
+      elseif id == dirid then
+        if curr.dir:sub(1,1) == "+" then
+          local n = getnext(curr)
+          if n.id == glyphid then
+            head = do_interhangul_option(head, anchor, pc, n.char, n.font, par)
           end
-        elseif is_blocking_node(curr) then
           pc = 0
         end
-        pcurr = false
+      elseif is_blocking_node(curr) then
+        pc = 0
       end
-      curr = getnext(curr)
     end
+    walk_prelinebreak(head, handle)
     return head
   end
 end
@@ -1130,65 +1133,61 @@ do
     return head, cc, f, c
   end
   function process_interlatincjk (head, par)
-    local curr, pc, pf, p, pcurr = head, 0, false, false, false
+    local pc, pf, p = 0, false, false
     --[[
     -- pc: 앞 글자 cjk 여부(1 = cjk, 2 = non-cjk, 0 = other)
     -- pf: 앞 글자 폰트
     -- p : 앞 글자 코드
-    -- pcurr: 글자 첫머리 노드
     --]]
-    while curr do
-      if curr.id == glyphid and is_cjk_char(curr.char) then
-        pf = curr.font
-        break
+    do -- seed pf with the font of the first CJK glyph in the list
+      local curr = head
+      while curr do
+        if curr.id == glyphid and is_cjk_char(curr.char) then
+          pf = curr.font
+          break
+        end
+        curr = getnext(curr)
       end
-      curr = getnext(curr)
     end
 
-    curr = head
-    while curr do
-      if has_attribute(curr, charhead) or harf_actual_literal(curr) == 1 then
-        pcurr = pcurr or curr
-      else
-        local id = curr.id
-        if id == glyphid then
-          local c = has_attribute(curr, unicodeattr) or curr.char
-          if c and not is_combining(c) then
-            head, pc, pf, p = do_interlatincjk_option(head, pcurr or curr, p, pc, pf, c, curr.font, par)
-          end
+    local function handle (curr, anchor)
+      local id = curr.id
+      if id == glyphid then
+        local c = has_attribute(curr, unicodeattr) or curr.char
+        if c and not is_combining(c) then
+          head, pc, pf, p = do_interlatincjk_option(head, anchor, p, pc, pf, c, curr.font, par)
+        end
 
-        elseif id == hlistid and is_blocking_node(curr) then
-          local c, f = hbox_char_font(curr, true)
-          if c then
-            head = do_interlatincjk_option(head, pcurr or curr, p, pc, pf, c, pf or f, false)
-          end
-          c, f = hbox_char_font(curr)
-          pc = c and (is_cjk_char(c) and 1 or is_noncjk_char(c) and 2) or 0
-          pf, p  = pf or f, c
+      elseif id == hlistid and is_blocking_node(curr) then
+        local c, f = hbox_char_font(curr, true)
+        if c then
+          head = do_interlatincjk_option(head, anchor, p, pc, pf, c, pf or f, false)
+        end
+        c, f = hbox_char_font(curr)
+        pc = c and (is_cjk_char(c) and 1 or is_noncjk_char(c) and 2) or 0
+        pf, p  = pf or f, c
 
-        elseif id == mathid then
-          if pc == 1 then
-            head = do_interlatincjk_option(head, pcurr or curr, p, pc, pf, 0x30, pf, par)
-          end
-          curr, pc, p = end_of_math(curr), 2, 0x30
+      elseif id == mathid then
+        if pc == 1 then
+          head = do_interlatincjk_option(head, anchor, p, pc, pf, 0x30, pf, par)
+        end
+        pc, p = 2, 0x30
+        return end_of_math(curr)
 
-        elseif id == dirid then
-          if curr.dir:sub(1,1) == "+" then
-            local n = getnext(curr)
-            if n.id == glyphid then
-              head = do_interlatincjk_option(head, pcurr or curr, p, pc, pf, n.char, n.font, par)
-            end
-            pc, p = 0, false
+      elseif id == dirid then
+        if curr.dir:sub(1,1) == "+" then
+          local n = getnext(curr)
+          if n.id == glyphid then
+            head = do_interlatincjk_option(head, anchor, p, pc, pf, n.char, n.font, par)
           end
-
-        elseif is_blocking_node(curr) then
           pc, p = 0, false
         end
-        pcurr = false
-      end
 
-      curr = getnext(curr)
+      elseif is_blocking_node(curr) then
+        pc, p = 0, false
+      end
     end
+    walk_prelinebreak(head, handle)
     return head
   end
 end
