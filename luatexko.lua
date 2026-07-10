@@ -747,12 +747,10 @@ local function process_fonts (head)
             curr.font = hjf
           elseif not char_in_font(curr.font, c) then
             local fbf = has_attribute(curr, fallbackfontattr) or false
-            for _,f in ipairs{ hf, hjf, fbf } do
-              if f and char_in_font(f, c) then
-                curr.font = f
-                break
-              end
-            end
+            local f = hf  and char_in_font(hf,  c) and hf
+                   or hjf and char_in_font(hjf, c) and hjf
+                   or fbf and char_in_font(fbf, c) and fbf
+            if f then curr.font = f end
           end
         end
       end
