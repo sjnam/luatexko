@@ -161,181 +161,125 @@ if harfbuzz then
   end
 end
 
+-- Each of these tables memoizes a per-font-id value: the __index metamethod
+-- computes the value once, caches it under the font id, and returns it.
+-- The pattern was identical for a dozen options, so we build them from a
+-- single factory. `compute` is called only with a truthy fid; when fid is
+-- falsy the metamethod yields `default` (nil unless given).
+local function memo_per_font (compute, default)
+  return setmetatable( {}, { __index = function(t, fid)
+    if not fid then return default end
+    local v = compute(fid)
+    t[fid] = v
+    return v
+  end } )
+end
+
 local fontoptions = {
-  is_widefont = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local fontdata = get_font_data(fid)
-      local format   = fontdata.format
-      local encode   = fontdata.encodingbytes
-      local bool     = encode == 2 or format == "opentype" or format == "truetype"
-      t[fid] = bool
-      return bool
-    end
-  end }),
+  is_widefont = memo_per_font(function(fid)
+    local fontdata = get_font_data(fid)
+    local format   = fontdata.format
+    local encode   = fontdata.encodingbytes
+    return encode == 2 or format == "opentype" or format == "truetype"
+  end),
 
-  is_hangulscript = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local bool = option_in_font(fid, "script") == "hang"
-      t[fid] = bool
-      return bool
-    end
-  end }),
+  is_hangulscript = memo_per_font(function(fid)
+    return option_in_font(fid, "script") == "hang"
+  end),
 
-  compresspunctuations = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local bool = option_in_font(fid, "compresspunctuations")
-                and not option_in_font(fid, "halt")
-                and not option_in_font(fid, "vhal")
-                or false
-      t[fid] = bool
-      return bool
-    end
-  end }),
+  compresspunctuations = memo_per_font(function(fid)
+    return option_in_font(fid, "compresspunctuations")
+       and not option_in_font(fid, "halt")
+       and not option_in_font(fid, "vhal")
+       or false
+  end),
 
-  removeclassicspaces = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local bool = option_in_font(fid, "removeclassicspaces") or false
-      t[fid] = bool
-      return bool
-    end
-  end }),
+  removeclassicspaces = memo_per_font(function(fid)
+    return option_in_font(fid, "removeclassicspaces") or false
+  end),
 
-  slantvalue = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local val = option_in_font(fid, "slant") or false
-      t[fid] = val
-      return val
-    end
-  end }),
+  slantvalue = memo_per_font(function(fid)
+    return option_in_font(fid, "slant") or false
+  end),
 
-  charraise = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local dim = font_opt_dim(fid, "charraise") or false
-      t[fid] = dim
-      return dim
-    end
-  end }),
+  charraise = memo_per_font(function(fid)
+    return font_opt_dim(fid, "charraise") or false
+  end),
 
-  intercharacter = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local dim = font_opt_dim(fid, "intercharacter") or false
-      t[fid] = dim
-      return dim
-    end
-  end }),
+  intercharacter = memo_per_font(function(fid)
+    return font_opt_dim(fid, "intercharacter") or false
+  end),
 
-  intercharstretch = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local dim = font_opt_dim(fid, "intercharstretch") or false
-      t[fid] = dim
-      return dim
-    end
-  end }),
+  intercharstretch = memo_per_font(function(fid)
+    return font_opt_dim(fid, "intercharstretch") or false
+  end),
 
-  intercharpenalty = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local pena = option_in_font(fid, "intercharpenalty") or false
-      t[fid] = pena
-      return pena
-    end
-  end }),
+  intercharpenalty = memo_per_font(function(fid)
+    return option_in_font(fid, "intercharpenalty") or false
+  end),
 
-  interhangul = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local dim = font_opt_dim(fid, "interhangul") or false
-      t[fid] = dim
-      return dim
-    end
-  end }),
+  interhangul = memo_per_font(function(fid)
+    return font_opt_dim(fid, "interhangul") or false
+  end),
 
-  interlatincjk = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local dim = font_opt_dim(fid, "interlatincjk") or false
-      t[fid] = dim
-      return dim
-    end
-  end }),
+  interlatincjk = memo_per_font(function(fid)
+    return font_opt_dim(fid, "interlatincjk") or false
+  end),
 
-  is_vertical = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local vertical = option_in_font(fid, "vertical") or false
-      t[fid] = vertical
-      return vertical
-    end
-  end }),
+  is_vertical = memo_per_font(function(fid)
+    return option_in_font(fid, "vertical") or false
+  end),
 
-  en_size = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local val = (get_font_param(fid, "quad") or 655360)/2
-      t[fid] = val
-      return val
-    end
-    return 327680
-  end } ),
+  en_size = memo_per_font(function(fid)
+    return (get_font_param(fid, "quad") or 655360)/2
+  end, 327680),
 
-  hangulspaceskip = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local newwd
-      if has_harf_data(fid) then
-        newwd = getparameters(fid) or false
-        if newwd then
-          newwd = { newwd.space, newwd.space_stretch, newwd.space_shrink, newwd.extra_space }
-        end
-      else
-        local newsp = nodenew(glyphid)
-        newsp.char, newsp.font = 32, fid
-        newsp = nodes.simple_font_handler(newsp) -- incorrect in vertical writing. backward compat.
-        newwd = newsp and newsp.width or false
-        if newwd then
-          newwd = { tex.sp(newwd), tex.sp(newwd/2), tex.sp(newwd/3), tex.sp(newwd/3) }
-        end
-        if newsp then nodefree(newsp) end
+  hangulspaceskip = memo_per_font(function(fid)
+    local newwd
+    if has_harf_data(fid) then
+      newwd = getparameters(fid) or false
+      if newwd then
+        newwd = { newwd.space, newwd.space_stretch, newwd.space_shrink, newwd.extra_space }
       end
-      t[fid] = newwd
-      return newwd
-    end
-  end } ),
-
-  monospaced = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      -- space_stretch has been set to zero by fontloader
-      if get_font_param(fid, "space_stretch") == 0 then
-        t[fid] = true; return true
+    else
+      local newsp = nodenew(glyphid)
+      newsp.char, newsp.font = 32, fid
+      newsp = nodes.simple_font_handler(newsp) -- incorrect in vertical writing. backward compat.
+      newwd = newsp and newsp.width or false
+      if newwd then
+        newwd = { tex.sp(newwd), tex.sp(newwd/2), tex.sp(newwd/3), tex.sp(newwd/3) }
       end
-      -- but not in harf mode; so we simply test widths of some glyphs
-      local chars = get_font_data(fid).characters or {}
-      local i, M = chars[0x69], chars[0x4D]
-      if i and M and i.width == M.width then
-        t[fid] = true; return true
-      end
-      t[fid] = false; return false
+      if newsp then nodefree(newsp) end
     end
-  end } ),
+    return newwd
+  end),
 
-  asc_desc = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local asc, desc = get_font_param(fid, "ascender"), get_font_param(fid, "descender")
-      -- luaharfbuzz's Font:get_h_extents() gets ascender value from hhea table;
-      -- Node mode's parameters.ascender is gotten from OS/2 table.
-      -- TypoAscender in OS/2 table seems to be more suitable for our purpose.
-      if not (asc and desc) then
-        asc, desc = get_asc_desc(has_harf_data(fid))
-      end
-      asc, desc  = asc  or false, desc or false
-      t[fid] = { asc, desc }
-      return { asc, desc }
+  monospaced = memo_per_font(function(fid)
+    -- space_stretch has been set to zero by fontloader
+    if get_font_param(fid, "space_stretch") == 0 then
+      return true
     end
-    return { }
-  end } ),
+    -- but not in harf mode; so we simply test widths of some glyphs
+    local chars = get_font_data(fid).characters or {}
+    local i, M = chars[0x69], chars[0x4D]
+    return i and M and i.width == M.width or false
+  end),
 
-  vertcharraise = setmetatable( {}, { __index = function(t, fid)
-    if fid then
-      local fontdata = get_font_data(fid)
-      local vertraise = fontdata and fontdata.vertcharraise or false
-      t[fid] = vertraise
-      return vertraise
+  asc_desc = memo_per_font(function(fid)
+    local asc, desc = get_font_param(fid, "ascender"), get_font_param(fid, "descender")
+    -- luaharfbuzz's Font:get_h_extents() gets ascender value from hhea table;
+    -- Node mode's parameters.ascender is gotten from OS/2 table.
+    -- TypoAscender in OS/2 table seems to be more suitable for our purpose.
+    if not (asc and desc) then
+      asc, desc = get_asc_desc(has_harf_data(fid))
     end
-  end } ),
+    return { asc or false, desc or false }
+  end, { }),
+
+  vertcharraise = memo_per_font(function(fid)
+    local fontdata = get_font_data(fid)
+    return fontdata and fontdata.vertcharraise or false
+  end),
 
   hb_char_bbox = { }, -- for vertical writing or fake slant
   tsb_data = { }, -- for vertical writing
