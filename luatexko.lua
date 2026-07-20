@@ -927,21 +927,21 @@ do
   end
 end
 
--- The four pre-linebreak passes below share one traversal skeleton: step
--- through the list, skip the "char head" and HarfBuzz-literal marker nodes
--- while remembering the first skipped one as the anchor -- the node before
--- which any glue or penalty is inserted -- and hand every real node to a
--- per-pass handler. The handler mutates its own captured state and returns
--- the node to resume from; that return is what lets the math branch jump
--- past end_of_math(). Returning nothing simply resumes at the current node.
-local function walk_prelinebreak (head, handle)
-  local curr, pcurr = head, false
+-- Scan forward from `curr` to the first node that is not a "char head" or
+-- HarfBuzz-literal marker, and return it together with its anchor: the first
+-- marker of the run immediately preceding it, or the node itself when no
+-- marker preceded it. The anchor is the node before which glue and penalties
+-- get inserted. Marker runs never carry across a real node, so this needs no
+-- state between calls -- the four pre-linebreak passes below each drive it
+-- from a plain `while` loop, which keeps their state in locals and leaves
+-- them free to jump (as the math branches do via end_of_math).
+local function next_real_node (curr)
+  local anchor
   while curr do
     if has_attribute(curr, charhead) or harf_actual_literal(curr) == 1 then
-      pcurr = pcurr or curr
+      anchor = anchor or curr
     else
-      curr = handle(curr, pcurr or curr) or curr
-      pcurr = false
+      return curr, anchor or curr
     end
     curr = getnext(curr)
   end
@@ -971,7 +971,8 @@ do
     -- pf : 앞 글자 폰트
     -- old: 현재 classic 모드임을 표시 (이 함수는 classic 모드에서만 동작한다)
     --]]
-    local function handle (curr, anchor)
+    local curr, anchor = next_real_node(head)
+    while curr do
       local id = curr.id
       if id == glyphid and curr.lang ~= nohyphen then
         local cc = curr.char
@@ -993,8 +994,8 @@ do
           pcl, pc, pf = 0, 0x4E00, false
         end
       end
+      curr, anchor = next_real_node(getnext(curr))
     end
-    walk_prelinebreak(head, handle)
     return head
   end
   function process_linebreak (head, par)
@@ -1004,7 +1005,8 @@ do
     -- pcl: 앞 글자 클래스(0..7)
     -- pf : 앞 글자 폰트
     --]]
-    local function handle (curr, anchor)
+    local curr, anchor = next_real_node(head)
+    while curr do
       local id = curr.id
       if id == glyphid then
         local c = has_attribute(curr, unicodeattr) or curr.char
@@ -1032,8 +1034,7 @@ do
         pc, pf, pcl  = c or old and -1, pf or f, c and get_char_class(c, old) or 0
 
       elseif id == mathid then
-        pc, pcl = 0x30, 0
-        return end_of_math(curr)
+        pc, pcl, curr = 0x30, 0, end_of_math(curr)
 
       elseif id == dirid then
         if curr.dir:sub(1,1) == "+" then -- push dir
@@ -1048,8 +1049,8 @@ do
       elseif is_blocking_node(curr) then
         pc, pcl = false, 0
       end
+      curr, anchor = next_real_node(getnext(curr))
     end
-    walk_prelinebreak(head, handle)
     return head
   end
 end
@@ -1076,7 +1077,8 @@ do
     -- pc: 앞 글자 한글 여부(1 or 0)
     -- pf: 앞 글자 폰트
     --]]
-    local function handle (curr, anchor)
+    local curr, anchor = next_real_node(head)
+    while curr do
       local id = curr.id
       if id == glyphid then
         local c = has_attribute(curr, unicodeattr) or curr.char
@@ -1093,8 +1095,7 @@ do
         pc, pf = c and is_hangul_jamo(c) and 1 or 0, pf or f
 
       elseif id == mathid then
-        pc = 0
-        return end_of_math(curr)
+        pc, curr = 0, end_of_math(curr)
       elseif id == dirid then
         if curr.dir:sub(1,1) == "+" then
           local n = getnext(curr)
@@ -1106,8 +1107,8 @@ do
       elseif is_blocking_node(curr) then
         pc = 0
       end
+      curr, anchor = next_real_node(getnext(curr))
     end
-    walk_prelinebreak(head, handle)
     return head
   end
 end
@@ -1150,7 +1151,8 @@ do
       end
     end
 
-    local function handle (curr, anchor)
+    local curr, anchor = next_real_node(head)
+    while curr do
       local id = curr.id
       if id == glyphid then
         local c = has_attribute(curr, unicodeattr) or curr.char
@@ -1171,8 +1173,7 @@ do
         if pc == 1 then
           head = do_interlatincjk_option(head, anchor, p, pc, pf, 0x30, pf, par)
         end
-        pc, p = 2, 0x30
-        return end_of_math(curr)
+        curr, pc, p = end_of_math(curr), 2, 0x30
 
       elseif id == dirid then
         if curr.dir:sub(1,1) == "+" then
@@ -1186,8 +1187,8 @@ do
       elseif is_blocking_node(curr) then
         pc, p = 0, false
       end
+      curr, anchor = next_real_node(getnext(curr))
     end
-    walk_prelinebreak(head, handle)
     return head
   end
 end
