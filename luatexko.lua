@@ -2398,7 +2398,7 @@ do
         local chardata = char_in_font(curr.font, curr.char)
         local diff = chardata and chardata.luatexko_diff or 0
 
-        if has_harf_data(curr.font) then -- harf-mode
+        if chardata and has_harf_data(curr.font) then -- harf-mode
           local charraise = fontoptions.charraise[curr.font] or 0
           local yofforig  = curr.yoffset - charraise
           diff = diff + curr.width - yofforig
