@@ -1052,8 +1052,8 @@
 \tagpdfsetup
 {
   role/new-tag = StrikeOut/Span,
-  role/new-attribute = {TextDeco-underline}{/O~/Layout~/TextDecorationType~(Underline)},
-  role/new-attribute = {TextDeco-strikeout}{/O~/Layout~/TextDecorationType~(LineThrough)},
+  role/new-attribute = {TextDeco-underline}{/O~/Layout~/TextDecorationType~/Underline},
+  role/new-attribute = {TextDeco-strikeout}{/O~/Layout~/TextDecorationType~/LineThrough},
 }
 \socket_new:nn{tagsupport/luatexko/markoverwith/begin}{0}
 \socket_new:nn{tagsupport/luatexko/markoverwith/end}{0}
@@ -1181,8 +1181,8 @@
 \tagpdfsetup{
   role/new-tag = Vertical/Div,
   role/new-tag = Horizontal/Div,
-  role/new-attribute = {WritingMode-TbRl}{/O~/Layout~/WritingMode~(TbRl)},
-  role/new-attribute = {WritingMode-LrTb}{/O~/Layout~/WritingMode~(LrTb)},
+  role/new-attribute = {WritingMode-TbRl}{/O~/Layout~/WritingMode~/TbRl},
+  role/new-attribute = {WritingMode-LrTb}{/O~/Layout~/WritingMode~/LrTb},
 }
 \socket_new:nn{tagsupport/luatexko/writingmode/begin}{1}
 \socket_new:nn{tagsupport/luatexko/writingmode/end}{0}
@@ -1294,7 +1294,7 @@
 {
   \cs_if_eq:NNT \verticaltypesetting \relax % whole document is vertical
   {
-    \tag_struct_gput:nnn{\tag_get:n{struct_num}}{attribute}{/O~/Layout~/WritingMode~(TbRl)}
+    \tag_struct_gput:nnn{\tag_get:n{struct_num}}{attribute}{/O~/Layout~/WritingMode~/TbRl}
   }
 }
 \ExplSyntaxOff
