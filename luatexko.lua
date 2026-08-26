@@ -893,8 +893,8 @@ do
   function insert_glue_before (head, curr, par, br, brb, classic, ict, dim, fid)
     local prev = getprev(curr)
 
-    if prev and prev.penalty then
-      -- repect user's penalty
+    if prev and (prev.penalty or has_attribute(prev, chartail) == 1) then
+      -- repect user's penalty or unhboxed ruby kern
     else
       local pena = not br and 10000
         or type(brb) == "number" and brb
