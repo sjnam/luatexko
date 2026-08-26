@@ -893,7 +893,7 @@ do
   function insert_glue_before (head, curr, par, br, brb, classic, ict, dim, fid)
     local prev = getprev(curr)
 
-    if prev and (prev.penalty or has_attribute(prev, chartail) == 1) then
+    if prev and prev.penalty then
       -- repect user's penalty or unhboxed ruby kern
     else
       local pena = not br and 10000
@@ -904,7 +904,7 @@ do
       if not fid or pena ~= 0 then
         local pn = nodenew(penaltyid)
         pn.penalty = pena
-        head = insert_before(head, curr, pn)
+        head = insert_before(head, prev and has_attribute(prev, chartail) == 1 and prev or curr, pn)
       end
     end
     if not fid then return head end -- penalty only for non-glyph box + cjk
