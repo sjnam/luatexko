@@ -84,6 +84,7 @@ local hanjabyhanjaattr   = luatexbase.attributes.luatexkohanjabyhanjaattr
 local inhibitglueattr  = luatexbase.new_attribute"luatexko_inhibitglue_attr"
 local unicodeattr      = luatexbase.new_attribute"luatexko_unicode_attr"
 local charhead         = luatexbase.new_attribute"luatexko_char_head_attr"
+local chartail         = luatexbase.new_attribute"luatexko_char_tail_attr"
 local verticalattr  -- set later at otfregister
 local charraiseattr -- set later at otfregister
 
@@ -838,6 +839,8 @@ do
     if id == hlistid then
       if subtype == 3 then return false end -- indentbox
       if curr.next and curr.next.id == ins_id then return false end -- footnote
+    elseif has_attribute(curr, chartail) then
+      return false
     end
     return blocking_nodes[id] or id == kernid and subtype == 1 -- userkern
   end
@@ -1494,76 +1497,71 @@ function luatexko.dotemphboundary (i)
 end
 
 local function process_dotemph (head)
-  local curr, pcurr = head, false
   local to_free = { }
+  local curr, anchor = next_real_node(head)
   while curr do
-    if has_attribute(curr, charhead) or harf_actual_literal(curr) == 1 then
-      pcurr = pcurr or curr
-    else
-      if curr.list then
-        curr.list = process_dotemph(curr.list)
+    if curr.list then
+      curr.list = process_dotemph(curr.list)
 
-      elseif curr.id == glyphid then
-        local dotattr = has_attribute(curr, dotemphattr)
-        if dotattr and dotemphbox[dotattr] then
-          unset_attribute(curr, dotemphattr) -- avoid multiple run
+    elseif curr.id == glyphid then
+      local dotattr = has_attribute(curr, dotemphattr)
+      if dotattr and dotemphbox[dotattr] then
+        unset_attribute(curr, dotemphattr) -- avoid multiple run
 
-          local c = has_attribute(curr, unicodeattr) or curr.char
-          if is_hangul(c) or is_compat_jamo(c) or is_chosong(c) or is_hanja(c) or is_kana(c) then
+        local c = has_attribute(curr, unicodeattr) or curr.char
+        if is_hangul(c) or is_compat_jamo(c) or is_chosong(c) or is_hanja(c) or is_kana(c) then
 
-            local box = node.copy(dotemphbox[dotattr])
+          local box = node.copy(dotemphbox[dotattr])
 
-            -- consider charraise
-            box.shift = shift_put_top(curr, box, true)
+          -- consider charraise
+          box.shift = shift_put_top(curr, box, true)
 
-            local basewd = curr.width
-            if hangul_tonemark[curr.char] then -- horizontal hangul tonemark
-              basewd = 2 * basewd
-            end
-            -- put the dot before base syllable
-            local n = getnext(curr)
-            while n do
-              if n.id == glyphid then
-                if not is_combining(has_attribute(n, unicodeattr) or n.char) then break end
-                basewd = basewd + n.width
-              elseif n.id == kernid and n.subtype == 0 then -- fontkern
-                basewd = basewd + n.kern
-              elseif has_attribute(n, charhead) or (n.id == whatsitid and
-                (n.subtype == restore_whatsit or harf_actual_literal(n) == 2)) then -- pass
-              else
-                break
-              end
-              n = getnext(n)
-            end
-
-            local shift = (basewd - box.width)/2
-            if shift ~= 0 then
-              local list = box.list
-              local k = nodenew(kernid)
-              k.kern, k.subtype = shift, 1 -- userkern
-              box.list = insert_before(list, list, k)
-            end
-
-            box.width = 0
-            set_attribute(box, charhead, 1)
-            head = insert_before(head, pcurr or curr, box)
+          local basewd = curr.width
+          if hangul_tonemark[curr.char] then -- horizontal hangul tonemark
+            basewd = 2 * basewd
           end
+          -- put the dot before base syllable
+          local n = getnext(curr)
+          while n do
+            if n.id == glyphid then
+              if not is_combining(has_attribute(n, unicodeattr) or n.char) then break end
+              basewd = basewd + n.width
+            elseif n.id == kernid and n.subtype == 0 then -- fontkern
+              basewd = basewd + n.kern
+            elseif has_attribute(n, charhead) or (n.id == whatsitid and
+              (n.subtype == restore_whatsit or harf_actual_literal(n) == 2)) then -- pass
+            else
+              break
+            end
+            n = getnext(n)
+          end
+
+          local shift = (basewd - box.width)/2
+          if shift ~= 0 then
+            local list = box.list
+            local k = nodenew(kernid)
+            k.kern, k.subtype = shift, 1 -- userkern
+            box.list = insert_before(list, list, k)
+          end
+
+          box.width = 0
+          set_attribute(box, charhead, 1)
+          head = insert_before(head, anchor, box)
         end
-
-      elseif curr.id == whatsitid  and
-        curr.user_id == dotemph_id and
-        curr.type    == 100 then -- lua_number
-
-        local val = curr.value
-        nodefree(dotemphbox[val])
-        dotemphbox[val] = nil
-
-        to_free[#to_free+1] = curr
-        head = noderemove(head, curr)
       end
-      pcurr = false
+
+    elseif curr.id == whatsitid  and
+      curr.user_id == dotemph_id and
+      curr.type    == 100 then -- lua_number
+
+      local val = curr.value
+      nodefree(dotemphbox[val])
+      dotemphbox[val] = nil
+
+      to_free[#to_free+1] = curr
+      head = noderemove(head, curr)
     end
-    curr = getnext(curr)
+    curr, anchor = next_real_node(getnext(curr))
   end
 
   for _, v in ipairs(to_free) do nodefree(v) end
@@ -1795,6 +1793,8 @@ local function process_ruby_pre_linebreak (head)
         end
 
         if k2 then
+          set_attribute(r2, chartail, 2)
+          set_attribute(k2, chartail, 1)
           head, curr = insert_after(head, curr, r2)
           local n = getnext(curr)
           while n and n.id == penaltyid do -- skip penalty node for justification

@@ -1,7 +1,13 @@
 	Version 5.8
 
 	* luatexko.lua:
-	- mkdir cachedir only if needed, by a function call
+	- refactor the fontoptions block based on the factory pattern
+	- remove 3-element table allocation in fallback font search
+	- refactor duplicate code in node traversal skeleton
+	- mkdir cachedir only if needed, by using a function call
+
+	* luatexko.sty:
+	- pdf name instead of pdf string in tagging attributes
 
 2026-02-20	Dohyun Kim <nomosnomos at gmail com>
 
