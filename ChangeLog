@@ -1,9 +1,13 @@
+2026-08-28	Soojin Nam <jsunam at gmail com> Dohyun Kim <nomosnomos at gmail com>
+
 	Version 5.8
 
 	* luatexko.lua:
+	- cache the font table that font.fonts rebuilds on every access
 	- refactor the fontoptions block based on the factory pattern
 	- remove 3-element table allocation in fallback font search
 	- refactor duplicate code in node traversal skeleton
+	- allow linebreak between unhboxed ruby and CJK character
 	- mkdir cachedir only if needed, by using a function call
 
 	* luatexko.sty:

@@ -13,8 +13,8 @@
 
 luatexbase.provides_module {
   name        = 'luatexko',
-  date        = '2026/02/20',
-  version     = '5.7',
+  date        = '2026/08/28',
+  version     = '5.8',
   description = 'typesetting Korean with LuaTeX',
   author      = 'Dohyun Kim, Soojin Nam',
   license     = 'LPPL v1.3+',
@@ -911,7 +911,7 @@ do
     local prev = getprev(curr)
 
     if prev and prev.penalty then
-      -- repect user's penalty or unhboxed ruby kern
+      -- repect user's penalty
     else
       local pena = not br and 10000
         or type(brb) == "number" and brb
@@ -921,6 +921,7 @@ do
       if not fid or pena ~= 0 then
         local pn = nodenew(penaltyid)
         pn.penalty = pena
+        -- we inject penalty node before unhboxed ruby kern for line justification.
         head = insert_before(head, prev and has_attribute(prev, chartail) == 1 and prev or curr, pn)
       end
     end

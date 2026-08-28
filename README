@@ -1,4 +1,4 @@
-LuaTeX-ko Package version 5.7 (2026/02/20)
+LuaTeX-ko Package version 5.8 (2026/08/28)
 ===========================================
 
 This is a Lua(La)TeX macro package that supports typesetting Korean
@@ -74,7 +74,7 @@ Package Options
 
     [hangul]
 Load Hangul captions. Besides, this option adjusts interword and
-interline spacing. Declares \hangulpunctuations=1 as well.
+interline spacing.
 
     [hanja]
 Load Hanja captions. Also apply other settings as [hangul] option does.
