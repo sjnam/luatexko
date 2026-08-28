@@ -90,8 +90,25 @@ local charraiseattr -- set later at otfregister
 
 local stretch_f = 5/100 -- should be consistent for ruby
 
+-- font.getfont() knows only the fonts that Lua defined, so for the fonts TeX
+-- itself loaded -- every tfm font of plain TeX -- we have to fall back on
+-- font.fonts, whose __index rebuilds the entire font table from TeX's font
+-- memory on each and every access.  That costs some 90 microseconds a time,
+-- which is ruinous in the per-glyph loops below (char_in_font() alone asks
+-- for it once per character of the document).  A font's table never changes
+-- after the font is defined, so we keep what we built.  Fonts that Lua did
+-- define are cached by font.getfont() already; caching them here too costs
+-- nothing and keeps the code in one shape.
+local font_data_cache = {}
+
 local function get_font_data (fontid)
-  return fontgetfont(fontid) or font.fonts[fontid] or {}
+  local fontdata = font_data_cache[fontid]
+  if fontdata == nil then
+    fontdata = fontgetfont(fontid) or font.fonts[fontid]
+    if fontdata == nil then return {} end -- undefined font; do not cache
+    font_data_cache[fontid] = fontdata
+  end
+  return fontdata
 end
 
 local function get_font_param (f, key)
